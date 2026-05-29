@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deconstruct Studio — 项目全景架构地图</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.10.0/dist/mermaid.min.js"></script>
+<style>
+  :root { color-scheme: light; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8f9fa; color: #1a1a2e; padding: 2rem; }
+  h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+  .subtitle { color: #666; margin-bottom: 2rem; font-size: 0.95rem; }
+
+  .diagram-container { background: white; border-radius: 12px; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  .module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .module-card { background: white; border-radius: 10px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #4a6cf7; }
+  .module-card h3 { font-size: 1rem; margin-bottom: 0.5rem; color: #4a6cf7; }
+  .module-card p { font-size: 0.85rem; color: #555; line-height: 1.5; }
+  .module-card .tasks { margin-top: 0.5rem; font-size: 0.8rem; color: #888; }
+  .module-card.human { border-left-color: #e67e22; }
+  .module-card.human h3 { color: #e67e22; }
+  .module-card.data { border-left-color: #27ae60; }
+  .module-card.data h3 { color: #27ae60; }
+  .module-card.infra { border-left-color: #8e44ad; }
+  .module-card.infra h3 { color: #8e44ad; }
+
+  .call-chain { background: white; border-radius: 10px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 2rem; }
+  .call-chain h3 { font-size: 1rem; margin-bottom: 1rem; }
+  .chain-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .chain-step { background: #eef2ff; border-radius: 20px; padding: 0.4rem 0.8rem; font-size: 0.8rem; white-space: nowrap; }
+  .chain-arrow { color: #999; font-size: 1.2rem; }
+  .chain-step.human { background: #fef3e2; }
+  .chain-step.gate { background: #e8f5e9; font-weight: 600; }
+
+  .section { margin-bottom: 2.5rem; }
+  .section h2 { font-size: 1.2rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 2px solid #e0e0e0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: #f5f6fa; font-weight: 600; color: #333; }
+  td:first-child { font-weight: 500; font-family: 'SF Mono', monospace; font-size: 0.8rem; }
+
+  .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 768px) { .grid-2col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>Deconstruct Studio</h1>
+<p class="subtitle">完整项目全景架构地图 · 基于拆文工坊 v3.0 方案 · <code>contexts/拆文工坊/</code></p>
+
+<div class="diagram-container">
+  <pre class="mermaid">
+---
+title: Deconstruct Studio 系统架构总览
+---
+graph TB
+    subgraph Users["👤 用户层"]
+        U[创作者用户]
+    end
+
+    subgraph Frontend["🎨 前端层 React + Tailwind"]
+        Node1[节点1：选文导入]
+        Node2[节点2：AI深度精读]
+        Node3[节点3：分层拆解]
+        Node4[节点4：灵气筛选 ✋]
+        Node5[节点5：生成骨架]
+        Node6[节点6：仿写重构 ✋]
+        Node7[节点7：校验复盘]
+    end
+
+    subgraph AIEngine["🧠 AI 引擎层 ai-engine/"]
+        DR[deep_read 深度精读]
+        DC[deconstruct 分层拆解]
+        SM[map_skeleton 骨架映射]
+        CS[check_similarity 相似度检测]
+        ST[strip_test 跨题材测试]
+        SR[prompt_self_reflection 自省提示]
+        NCC[narrative_consistency_check 一致性检查]
+    end
+
+    subgraph RuleEngine["⚙️ 规则引擎层 rule-engine/"]
+        RS[user_status API<br/>冷却/频次/阶段]
+        STM[阶段状态机<br/>新手→成长→成熟]
+    end
+
+    subgraph GuardianAI["🛡️ 守护服务 guardian-ai/"]
+        P1[驳回死循环探针]
+        P2[灵气库污染探针]
+        P3[骨架拓扑单一探针]
+        P4[恶意刷失败探针]
+        P5[速率/成本熔断探针]
+        P6[洗稿检测探针]
+        P7[离线模式降级探针]
+        P8[公共库污染探针]
+    end
+
+    subgraph Storage["💾 数据层"]
+        DB[(PostgreSQL<br/>users, sessions, drafts)]
+        VDB[(Milvus<br/>灵气感知库)]
+        SK[(骨架库<br/>skeleton_library)]
+    end
+
+    subgraph External["🔌 外部依赖"]
+        LLM[LLM API<br/>OpenAI-compatible]
+        EMB[Embedding API<br/>text-embedding-3-small]
+    end
+
+    U --> Node1
+    Node1 --> Node2
+    Node2 --> DR
+    Node2 --> Node3
+    Node3 --> DC
+    Node3 --> Node4
+    Node4 --> ST
+    Node4 --> Node5
+    Node5 --> SM
+    Node5 --> Node6
+    Node6 --> Node7
+    Node7 --> CS
+    Node7 --> SR
+    Node7 --> NCC
+
+    DR --> DC
+    DC --> SM
+    SM --> CS
+    CS --> SR
+
+    CS --> RS
+    RS --> STM
+
+    DR -.->|LLM| LLM
+    DC -.->|LLM| LLM
+    SM -.->|LLM| LLM
+    CS -.->|embedding| EMB
+    SR -.->|LLM| LLM
+    ST -.->|LLM| LLM
+    NCC -.->|LLM| LLM
+
+    GuardianAI -.->|探针监控| Frontend
+    GuardianAI -.->|探针监控| AIEngine
+    GuardianAI -.->|探针监控| RuleEngine
+    GuardianAI -.->|告警| BigQuery
+
+    Node4 ---->|写入| VDB
+    Node5 ---->|贡献| SK
+    Node7 ---->|归档| DB
+  </pre>
+</div>
+
+<div class="section">
+  <h2>🏗️ 核心模块</h2>
+  <div class="module-grid">
+    <div class="module-card">
+      <h3>ai-engine/ · AI 微服务</h3>
+      <p>7 个 LLM 驱动的分析任务，串行调用链。每个任务接收/输出结构化 JSON。</p>
+      <div class="tasks">deep_read → deconstruct → map_skeleton → check_similarity → strip_test → prompt_self_reflection → narrative_consistency_check</div>
+    </div>
+    <div class="module-card">
+      <h3>frontend/ · Web 前端</h3>
+      <p>React + Tailwind 单页应用，实现 7 节点工作流完整交互。含 Playwright 端到端测试。</p>
+      <div class="tasks">节点 1-7 状态机 · 冷却期锁死 · 灵气筛选 UI · 三问模态框 · 校验雷达图 · 头脑风暴白板</div>
+    </div>
+    <div class="module-card">
+      <h3>rule-engine/ · 规则引擎</h3>
+      <p>冷却计时、频次控制、动态阈值放宽、三阶段状态切换。user_status API 作为所有操作的前置依赖。</p>
+      <div class="tasks">cooldown_until · daily_submit_count · consecutive_failures · stage machine</div>
+    </div>
+    <div class="module-card">
+      <h3>guardian-ai/ · 守护服务</h3>
+      <p>8 个自动化监控探针，24×7 运行。异常自动记录到 BigQuery。</p>
+      <div class="tasks">驳回死循环 · 灵气污染 · 骨架单一 · 恶意刷 · 速率熔断 · 洗稿 · 离线降级 · 公共库污染</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🔄 7 节点工作流（用户旅程）</h2>
+  <div class="call-chain">
+    <div class="chain-steps">
+      <span class="chain-step">节点1 选文导入</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step">节点2 AI深度精读</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step">节点3 分层拆解</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step human">节点4 灵气筛选 🧑</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step">节点5 生成骨架</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step human">节点6 仿写重构 🧑</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step">节点7 校验复盘</span>
+    </div>
+    <p style="margin-top: 0.75rem; font-size: 0.8rem; color: #888;">
+      🧑 = 人工核心节点 — AI 只有建议权，无决策权
+    </p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🔗 AI 引擎调用链（串行）</h2>
+  <div class="call-chain">
+    <div class="chain-steps">
+      <span class="chain-step">deep_read</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step">deconstruct</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step human">🧑 人工筛选（节点4）</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step">map_skeleton</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step human">🧑 仿写（节点6）</span>
+      <span class="chain-arrow">→</span>
+      <span class="chain-step">check_similarity</span>
+    </div>
+    <p style="margin-top: 0.75rem; font-size: 0.8rem; color: #888;">
+      并行/独立任务：strip_test（节点4触发） · prompt_self_reflection（节点7失败触发） · narrative_consistency_check（节点7校验）
+    </p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>📊 数据模型</h2>
+  <table>
+    <tr><th>表</th><th>用途</th><th>关键字段</th></tr>
+    <tr><td>users</td><td>用户账号 + 阶段状态</td><td>stage, cooldown_until, consecutive_failures, daily_submit_count, reputation_score</td></tr>
+    <tr><td>deconstruct_sessions</td><td>单篇拆解完整记录</td><td>节点时间戳、AI输出路径、三问答案、校验历史</td></tr>
+    <tr><td>imitation_drafts</td><td>仿写稿版本控制</td><td>全文历史、相似度结果、防刷对比</td></tr>
+    <tr><td>skeleton_library</td><td>公共骨架库</td><td>topology_cluster_id, contributor_reputation</td></tr>
+    <tr><td>inspiration_entries</td><td>个人灵气感知库</td><td>笔记向量（Milvus）、手法抽象描述</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>🧭 三阶段成长体系</h2>
+  <div class="grid-2col">
+    <div>
+      <table>
+        <tr><th>阶段</th><th>训练配比</th><th>拆解频次</th><th>校验阈值</th></tr>
+        <tr><td>🌱 新手</td><td>7仿写 3原创</td><td>每 2-3 天一篇</td><td>红灯 >70%</td></tr>
+        <tr><td>🌿 成长</td><td>5仿写 5原创</td><td>每周 ≤3 篇</td><td>红灯 >60%</td></tr>
+        <tr><td>🌳 成熟</td><td>100% 原创</td><td>无限制</td><td>仅记录</td></tr>
+      </table>
+    </div>
+    <div>
+      <p style="font-size: 0.85rem; color: #555;"><strong>阶段切换条件：</strong></p>
+      <p style="font-size: 0.8rem; color: #666; margin-top: 0.3rem;">
+        <strong>新手→成长：</strong><br>
+        ① 连续 5 篇仿写相似度均值 < 50%<br>
+        ② 情境剥离测试器使用率 < 20%<br><br>
+        <strong>成长→成熟：</strong><br>
+        ① 连续 30 天 AI 主动调用率 < 5%<br>
+        ② 提交纯原创代表作
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>👁️ Guardian-AI 探针矩阵</h2>
+  <table>
+    <tr><th>探针</th><th>检测逻辑</th><th>触发动作</th></tr>
+    <tr><td>驳回死循环</td><td>2h 内 ≥3 次提交-驳回且无通过</td><td>自动放宽阈值 10%</td></tr>
+    <tr><td>灵气库污染</td><td>笔记-手法相似度 <0.5 比例 >30%</td><td>推送健康检查通知</td></tr>
+    <tr><td>骨架拓扑单一</td><td>编辑距离聚类 <4 种拓扑</td><td>自动生成补全任务</td></tr>
+    <tr><td>恶意刷失败</td><td>1h 内连续失败且稿间相似度 >80%</td><td>冻结放宽资格</td></tr>
+    <tr><td>速率/成本熔断</td><td>10min 内相似度请求 >10 次且全红/黄</td><td>冻结 API 1h + CAPTCHA</td></tr>
+    <tr><td>洗稿检测</td><td>仿写稿与网络内容子串匹配 >70%</td><td>标记高风险，人工抽检</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>📦 项目结构（建议）</h2>
+  <pre style="background: #1a1a2e; color: #e0e0e0; padding: 1rem; border-radius: 8px; font-size: 0.8rem; line-height: 1.6; overflow-x: auto;">
+AI-novel-workshop/
+├── ai-engine/              # Python, LLM调用的7个任务
+├── frontend/               # React + Tailwind SPA
+├── rule-engine/            # 冷却/频次/阶段状态机
+├── guardian-ai/            # 监控探针脚本
+├── data-pipeline/          # 种子骨架生成脚本
+├── contracts/              # OpenAPI/Pact 契约文件
+├── contexts/               # 领域上下文
+│   └── 拆文工坊/
+│       ├── CONTEXT.md
+│       └── docs/adr/
+├── docs/
+│   ├── agents/             # Agent技能配置
+│   └── adr/                # 系统级ADR
+├── .agents/                # Agent技能定义
+├── CLAUDE.md
+├── CONTEXT-MAP.md
+├── 拆文.md
+└── 拆文工坊产品与架构设计方案.md
+  </pre>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'strict' });
+</script>
+</body>
+</html>
