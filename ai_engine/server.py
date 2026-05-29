@@ -119,6 +119,17 @@ def get_session(session_id: int, db=Depends(get_db)):
     return {"session": session, "drafts": drafts}
 
 
+@app.get("/")
+def root():
+    return {
+        "service": "Deconstruct Studio AI Engine",
+        "version": "0.2.0",
+        "docs": "/docs",
+        "health": "/health",
+        "status": "running",
+    }
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "ai-engine", "version": "0.2.0"}
