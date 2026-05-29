@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Deconstruct Studio — 7节点工作流 MVP</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" defer></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
@@ -22,7 +22,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .step-inner { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.25rem; border-radius: 6px; transition: all 0.2s; white-space: nowrap; }
 .step-inner:hover { background: #f5f6fa; }
 .step-circle { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; border: 2px solid #ccc; color: #999; transition: all 0.3s; flex-shrink: 0; }
-.step. active .step-circle { border-color: #4a6cf7; background: #4a6cf7; color: white; }
+.step.active .step-circle { border-color: #4a6cf7; background: #4a6cf7; color: white; }
 .step.completed .step-circle { border-color: #22c55e; background: #22c55e; color: white; }
 .step.cooldown .step-circle { border-color: #f59e0b; background: #fef3c7; color: #f59e0b; }
 .step.locked .step-circle { border-color: #d1d5db; background: #f3f4f6; color: #bbb; }
@@ -382,7 +382,8 @@ function renderNodeContent() {
 function clickNode(id) {
   const s = wc.getState();
   if (s.nodes[id].status === NodeStatus.COMPLETED) {
-    renderers[id]();
+    const RENDERERS = { 1: renderNode1, 2: renderNode2, 3: renderNode3, 4: renderNode4, 5: renderNode5, 6: renderNode6, 7: renderNode7 };
+    RENDERERS[id]();
   }
 }
 
@@ -468,6 +469,10 @@ function renderNode2() {
 function drawEmotionChart() {
   const canvas = document.getElementById('emotionChart');
   if (!canvas) return;
+  if (typeof Chart === 'undefined') {
+    canvas.parentElement.innerHTML = '<div style="padding:1rem;text-align:center;color:#999;">📊 情绪曲线图（Chart.js 未加载）</div>';
+    return;
+  }
   new Chart(canvas, {
     type: 'line',
     data: {
@@ -716,6 +721,10 @@ function showVerdict(v, q1, q2, q3) {
 function drawRadarChart(sims) {
   const canvas = document.getElementById('radarChart');
   if (!canvas) return;
+  if (typeof Chart === 'undefined') {
+    canvas.parentElement.innerHTML = '<div style="padding:1rem;text-align:center;color:#999;">📊 雷达图（Chart.js 未加载）</div>';
+    return;
+  }
   new Chart(canvas, {
     type: 'radar',
     data: {
@@ -731,6 +740,19 @@ function drawRadarChart(sims) {
       plugins: { legend: { position: 'bottom' } },
     }
   });
+}
+
+function renderNode7() {
+  const el = document.getElementById('nodeContent');
+  el.innerHTML = `
+  <div class="card node-content">
+    <h2>节点7：校验与复盘 <span class="tag">AI校验</span></h2>
+    <p class="desc">正在运行相似度校验，请稍候...</p>
+    <div style="text-align:center;padding:2rem;">
+      <div style="font-size:2rem;margin-bottom:1rem;">⏳</div>
+      <div style="color:#666;font-size:0.85rem;">校验结果即将呈现</div>
+    </div>
+  </div>`;
 }
 
 function renderAllDone() {

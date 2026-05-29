@@ -4,7 +4,9 @@ Uses configurable DB (SQLite dev / PostgreSQL prod).
 """
 import os, logging
 from datetime import datetime
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from models.schemas import Stage, SimilarityInput
@@ -17,6 +19,12 @@ from probe.context import SkeletonDiversityProbe, AbuseProbe, RateLimitProbe
 
 _log = logging.getLogger(__name__)
 app = FastAPI(title="Deconstruct Studio AI Engine", version="0.2.0")
+
+# --- Serve frontend SPA at /app ---
+frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+if frontend_dir.exists():
+    app.mount("/app", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
+    _log.info("Frontend mounted at /app from %s", frontend_dir)
 
 # --- Dependencies ---
 db = db_from_config()
@@ -124,6 +132,7 @@ def root():
     return {
         "service": "Deconstruct Studio AI Engine",
         "version": "0.2.0",
+        "frontend": "/app",
         "docs": "/docs",
         "health": "/health",
         "status": "running",
