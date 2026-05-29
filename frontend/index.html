@@ -269,6 +269,59 @@ class WorkflowController {
 
 const wc = new WorkflowController();
 
+// ===== Data cache (populated by API calls) =====
+const dataCache = {
+  originalText: '',
+  deepRead: null,
+  deconstruct: null,
+  skeleton: null,
+  stripResults: {},
+  threeAnswers: {},
+};
+
+// ===== API helper =====
+const API = {
+  async _post(path, body) {
+    try {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      console.warn(`API ${path} failed:`, e);
+      return null;
+    }
+  },
+  async deepRead(text, stage) {
+    const data = await this._post('/api/deep-read', { task: 'deep_read', original_text: text, stage: stage || 'novice' });
+    if (data) dataCache.deepRead = data;
+    return data;
+  },
+  async deconstruct(text, stage) {
+    const data = await this._post('/api/deconstruct', { task: 'deconstruct', original_text: text, stage: stage || 'novice' });
+    if (data) dataCache.deconstruct = data;
+    return data;
+  },
+  async mapSkeleton(text, answers) {
+    const data = await this._post('/api/map-skeleton', { task: 'map_skeleton', original_text: text, user_answers: answers });
+    if (data) dataCache.skeleton = data;
+    return data;
+  },
+  async stripTest(element) {
+    return await this._post('/api/strip-test', { task: 'strip_test', specific_element: element });
+  },
+  async validate(original, imitation, answers, stage, failures) {
+    return await this._post('/validate', {
+      task: 'validate', original_text: original, imitation_text: imitation,
+      user_answers: answers, stage: stage || 'novice',
+      previous_failures: failures || 0,
+    });
+  },
+};
+
 // ===== Mock data =====
 const MOCK = {
   summary: "本文讲述了一个出身卑微的年轻人，在历经家族覆灭、挚爱离世等重大打击后，凭借坚韧意志一步步崛起，最终在乱世中建立新秩序的故事。核心立意是：在极端逆境中，人性的选择比能力更能决定命运走向。",
@@ -308,6 +361,23 @@ const MOCK = {
     "古籍修复师在书页夹层发现了一封来自未来的信", "游泳教练在池底发现了一座沉没的城市模型",
   ],
 };
+
+// ===== Sample text for demo =====
+const SAMPLE_TEXT = `林小满站在讲台上，听着班主任宣读期中考试成绩。她的名字在第三十三名——全班四十二个人。窗外下着雨，她的心像被雨水浸透了一样沉。这不是她第一次考砸了，但这一次，妈妈说要来参加家长会。
+
+她不敢想象妈妈听到成绩时的表情。自从爸爸去世后，妈妈一个人打三份工供她读书。每天晚上，妈妈回家时都累得直不起腰，却还要笑着问她今天学了什么。
+
+放学后，林小满没有直接回家。她拐进了学校后面那条小巷。巷子尽头有一家旧书店，店主是个戴老花镜的爷爷，总是安静地坐在柜台后面看书。她经常来这里，因为这里可以免费看书，而且爷爷从来不赶她走。
+
+她推开玻璃门，门上的风铃发出清脆的声响。爷爷抬起头，看了她一眼，笑了笑："又考砸了？"
+
+林小满点点头，眼泪差点掉下来。
+
+爷爷从柜台下面拿出一个本子，封面已经泛黄了。"这是我年轻时的日记，"他说，"你看看，也许对你有帮助。"
+
+林小满翻开第一页，上面写着：今天，我又一次失败了。但我决定，明天再试一次。她的目光往下移动，看到了更多关于失败和坚持的文字。每一页都记录着一次挫折，每一页的结尾都写着同样的话：明天再试一次。
+
+她的眼泪终于掉了下来。但这一次，不是因为难过。`;
 
 // ===== Render functions =====
 
@@ -401,7 +471,7 @@ function renderNode1() {
     <h2>节点1：选文与导入</h2>
     <p class="desc">选择一篇你想拆解的小说/文章。支持多种导入方式。</p>
     <div class="import-options">
-      <div class="import-option" onclick="alert('📋 已粘贴剪贴板内容')">
+      <div class="import-option" onclick="pasteClipboard()">
         <div class="icon">📋</div>
         <div class="label">粘贴文本</div>
         <div class="sub">Ctrl+V 快速导入</div>
@@ -417,16 +487,42 @@ function renderNode1() {
         <div class="sub">支持.md .txt</div>
       </div>
     </div>
-    <textarea placeholder="或在此直接粘贴全文..." style="width:100%;min-height:120px;border:1px solid #d1d5db;border-radius:8px;padding:0.75rem;font-size:0.85rem;line-height:1.6;resize:vertical;font-family:inherit;margin-bottom:1rem;"></textarea>
+    <textarea id="sourceText" placeholder="或在此直接粘贴全文..." style="width:100%;min-height:120px;border:1px solid #d1d5db;border-radius:8px;padding:0.75rem;font-size:0.85rem;line-height:1.6;resize:vertical;font-family:inherit;margin-bottom:1rem;"></textarea>
     <div style="display:flex;gap:0.5rem;align-items:center;">
-      <button class="btn btn-primary" onclick="completeAndAdvance(1)">已导入，开始精读 →</button>
-      <span style="font-size:0.7rem;color:#999;">示例文章已预载（约3200字）</span>
+      <button class="btn btn-primary" id="btnAdvance1" onclick="importAndAdvance()">已导入，开始精读 →</button>
+      <span style="font-size:0.7rem;color:#999;" id="importStatus">示例文章已预载（约3200字）</span>
     </div>
   </div>`;
+  // Pre-load sample text
+  document.getElementById('sourceText').value = SAMPLE_TEXT;
+}
+
+function pasteClipboard() {
+  const ta = document.getElementById('sourceText');
+  ta.focus();
+  ta.select();
+  document.execCommand('paste');
+}
+
+async function importAndAdvance() {
+  const btn = document.getElementById('btnAdvance1');
+  const status = document.getElementById('importStatus');
+  const text = document.getElementById('sourceText')?.value?.trim();
+  if (!text) { alert('请先粘贴或输入文章内容'); return; }
+  dataCache.originalText = text;
+  btn.disabled = true;
+  status.textContent = '⏳ AI正在深度精读...';
+  await API.deepRead(text, wc.getState().stage);
+  status.textContent = '✅ 精读完成';
+  completeAndAdvance(1);
 }
 
 function renderNode2() {
   const el = document.getElementById('nodeContent');
+  const dr = dataCache.deepRead || MOCK;
+  const summary = dr.summary || MOCK.summary;
+  const curve = dr.emotion_curve || dr.emotionCurve || MOCK.emotionCurve;
+  const hooks = dr.hooks || MOCK.hooks;
   el.innerHTML = `
   <div class="card node-content">
     <h2>节点2：AI深度精读 <span class="tag">AI生成</span></h2>
@@ -434,7 +530,7 @@ function renderNode2() {
 
     <div style="margin-bottom:1rem;">
       <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">📝 摘要</h3>
-      <p style="font-size:0.8rem;color:#555;line-height:1.6;background:#f9fafb;padding:0.75rem;border-radius:8px;">${MOCK.summary}</p>
+      <p style="font-size:0.8rem;color:#555;line-height:1.6;background:#f9fafb;padding:0.75rem;border-radius:8px;">${summary}</p>
     </div>
 
     <div style="margin-bottom:1rem;">
@@ -450,36 +546,48 @@ function renderNode2() {
       <div>
         <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">🎣 钩子位置</h3>
         <div class="hooks-list">
-          ${MOCK.hooks.map(h => `<span class="hook-tag">${h.type} @ ${h.position}字</span>`).join('')}
+          ${hooks.map(h => `<span class="hook-tag">${h.type} @ ${h.position}字</span>`).join('')}
         </div>
       </div>
       <div>
         <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">📊 字数</h3>
-        <span style="font-size:0.85rem;color:#666;">3,247 字 | 预计阅读 8 分钟</span>
+        <span style="font-size:0.85rem;color:#666;">${dataCache.originalText.length.toLocaleString()} 字 | 预计阅读 ${Math.max(1, Math.round(dataCache.originalText.length / 400))} 分钟</span>
       </div>
     </div>
   </div>
   <div style="display:flex;justify-content:flex-end;gap:0.5rem;padding:0 1rem;">
-    <button class="btn btn-primary" onclick="completeAndAdvance(2)">确认，进入拆解 →</button>
+    <button class="btn btn-primary" id="btnAdvance2" onclick="advanceToDeconstruct()">确认，进入拆解 →</button>
+    <span style="font-size:0.7rem;color:#999;" id="status2"></span>
   </div>`;
   // Draw chart after render
-  setTimeout(drawEmotionChart, 50);
+  setTimeout(() => drawEmotionChart(curve), 50);
 }
 
-function drawEmotionChart() {
+async function advanceToDeconstruct() {
+  const btn = document.getElementById('btnAdvance2');
+  const st = document.getElementById('status2');
+  btn.disabled = true;
+  st.textContent = '⏳ AI正在分层拆解...';
+  await API.deconstruct(dataCache.originalText, wc.getState().stage);
+  st.textContent = '✅ 拆解完成';
+  completeAndAdvance(2);
+}
+
+function drawEmotionChart(curveData) {
   const canvas = document.getElementById('emotionChart');
   if (!canvas) return;
   if (typeof Chart === 'undefined') {
     canvas.parentElement.innerHTML = '<div style="padding:1rem;text-align:center;color:#999;">📊 情绪曲线图（Chart.js 未加载）</div>';
     return;
   }
+  const data = curveData || MOCK.emotionCurve;
   new Chart(canvas, {
     type: 'line',
     data: {
-      labels: MOCK.emotionCurve.map(p => p.position + '字'),
+      labels: data.map(p => p.position + '字'),
       datasets: [
-        { label: '情绪值', data: MOCK.emotionCurve.map(p => p.valence), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', fill: true, tension: 0.4, pointRadius: 3 },
-        { label: '强度', data: MOCK.emotionCurve.map(p => p.arousal), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.4, pointRadius: 3, borderDash: [4,4] },
+        { label: '情绪值', data: data.map(p => p.valence), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', fill: true, tension: 0.4, pointRadius: 3 },
+        { label: '强度', data: data.map(p => p.arousal), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.4, pointRadius: 3, borderDash: [4,4] },
       ]
     },
     options: {
@@ -492,6 +600,9 @@ function drawEmotionChart() {
 
 function renderNode3() {
   const el = document.getElementById('nodeContent');
+  const dc = dataCache.deconstruct || MOCK;
+  const portable = dc.portable_logic || dc.portableLogic || MOCK.portableLogic;
+  const specific = dc.specific_elements || dc.specificElements || MOCK.specificElements;
   el.innerHTML = `
   <div class="card node-content">
     <h2>节点3：分层拆解 <span class="tag">AI生成</span></h2>
@@ -499,11 +610,11 @@ function renderNode3() {
     <div class="two-col">
       <div class="list-card">
         <h3>✅ 可复用的通用逻辑 <span class="badge-green">Portable</span></h3>
-        <ul>${MOCK.portableLogic.map(l => `<li><span class="badge-green">通用</span> ${l}</li>`).join('')}</ul>
+        <ul>${portable.map(l => `<li><span class="badge-green">通用</span> ${l}</li>`).join('')}</ul>
       </div>
       <div class="list-card">
         <h3>⚠️ 专属桥段 <span class="badge-orange">Specific</span></h3>
-        <ul>${MOCK.specificElements.map(l => `<li><span class="badge-orange">专属</span> ${l}</li>`).join('')}</ul>
+        <ul>${specific.map(l => `<li><span class="badge-orange">专属</span> ${l}</li>`).join('')}</ul>
       </div>
     </div>
   </div>
@@ -514,6 +625,9 @@ function renderNode3() {
 
 function renderNode4() {
   const el = document.getElementById('nodeContent');
+  const dc = dataCache.deconstruct || MOCK;
+  const portable = dc.portable_logic || dc.portableLogic || MOCK.portableLogic;
+  const specific = dc.specific_elements || dc.specificElements || MOCK.specificElements;
   el.innerHTML = `
   <div class="card node-content">
     <h2>节点4：灵气筛选 🧑 <span class="tag" style="background:#fef3c2;color:#92400e;">人工核心</span></h2>
@@ -521,7 +635,7 @@ function renderNode4() {
     <div class="filter-layout">
       <div>
         <h3 style="font-size:0.8rem;color:#374151;margin-bottom:0.5rem;">✅ AI认为可通用的逻辑</h3>
-        ${MOCK.portableLogic.map(l => `
+        ${portable.map(l => `
         <div class="filter-item">
           <div>${l}</div>
           <div class="actions">
@@ -532,38 +646,69 @@ function renderNode4() {
       </div>
       <div>
         <h3 style="font-size:0.8rem;color:#374151;margin-bottom:0.5rem;">⚠️ AI认为专属的桥段</h3>
-        ${MOCK.specificElements.map(l => `
+        ${specific.map((l, i) => `
         <div class="filter-item">
           <div>${l}</div>
           <div class="actions">
-            <button class="btn btn-sm btn-outline" onclick="runStripTest(this, '${l}')">🧪 情境剥离测试</button>
+            <button class="btn btn-sm btn-outline" onclick="runStripTest(this, '${l}', ${i})">🧪 情境剥离测试</button>
           </div>
-          <div class="strip-test-result" style="display:none;" id="strip-${Math.random().toString(36).slice(2,8)}"></div>
+          <div class="strip-test-result" style="display:none;" id="strip-${i}"></div>
         </div>`).join('')}
       </div>
     </div>
   </div>
   <div style="display:flex;justify-content:flex-end;gap:0.5rem;padding:0 1rem;">
-    <button class="btn btn-primary" onclick="completeAndAdvance(4)">筛选完成，生成骨架 →</button>
+    <button class="btn btn-primary" id="btnAdvance4" onclick="advanceToSkeleton()">筛选完成，生成骨架 →</button>
+    <span style="font-size:0.7rem;color:#999;" id="status4"></span>
   </div>`;
 }
 
-function runStripTest(btn, element) {
+async function runStripTest(btn, element, idx) {
   const container = btn.closest('.filter-item').querySelector('.strip-test-result');
   container.style.display = 'block';
+  container.innerHTML = '<div style="text-align:center;color:#999;">⏳ 正在跨题材改写...</div>';
+  btn.textContent = '⏳ 测试中';
+  btn.disabled = true;
+
+  // Try API first
+  let testCases = null;
+  const result = await API.stripTest(element);
+  if (result && result.test_cases) {
+    testCases = result.test_cases;
+  } else if (dataCache.deconstruct && dataCache.deconstruct.strip_tests && dataCache.deconstruct.strip_tests[idx]) {
+    testCases = dataCache.deconstruct.strip_tests[idx];
+  } else {
+    // fallback
+    testCases = MOCK.inspirationIdeas;
+  }
+
   container.innerHTML = `<h4 style="font-size:0.75rem;margin-bottom:0.4rem;">🧪 跨题材改写测试</h4>
-    ${MOCK.inspirationIdeas.map(idea => `
+    ${testCases.map(idea => `
       <div style="margin-bottom:0.4rem;padding:0.3rem 0;border-bottom:1px solid #eee;">
         <span style="font-weight:500;color:#4a6cf7;">[${idea.genre}]</span>
-        <span>${idea.text.slice(0, 50)}...</span>
+        <span>${(idea.text || idea.rewritten || '').slice(0, 60)}...</span>
       </div>`).join('')}
-    <button class="btn btn-sm btn-ghost" onclick="this.closest('.strip-test-result').querySelectorAll('div').forEach(d=>d.style.borderLeft='3px solid #4a6cf7');">💡 这条手法仍然打动我 → 收入灵气库</button>`;
+    <button class="btn btn-sm btn-ghost" onclick="this.closest('.strip-test-result').querySelectorAll('div').forEach(d=>d.style.borderLeft='3px solid #4a6cf7');alert('💡 已收入灵气库！')">💡 这条手法仍然打动我 → 收入灵气库</button>`;
   btn.textContent = '✅ 已测试';
+}
+
+async function advanceToSkeleton() {
+  const btn = document.getElementById('btnAdvance4');
+  const st = document.getElementById('status4');
   btn.disabled = true;
+  st.textContent = '⏳ AI正在生成骨架...';
+  // collect three answers from cache (may have been set earlier)
+  const answers = dataCache.threeAnswers;
+  await API.mapSkeleton(dataCache.originalText, answers);
+  st.textContent = '✅ 骨架生成完成';
+  completeAndAdvance(4);
 }
 
 function renderNode5() {
   const el = document.getElementById('nodeContent');
+  const sk = dataCache.skeleton || MOCK;
+  const textSkeleton = sk.text_skeleton || sk.textSkeleton || MOCK.skeleton;
+  const mermaidCode = sk.mermaid_code || sk.mermaidCode || MOCK.mermaid;
   el.innerHTML = `
   <div class="card node-content">
     <h2>节点5：生成叙事骨架 <span class="tag">AI生成</span></h2>
@@ -571,11 +716,11 @@ function renderNode5() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
       <div>
         <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">📝 文字骨架</h3>
-        <div class="skeleton-text">${MOCK.skeleton}</div>
+        <div class="skeleton-text">${textSkeleton}</div>
       </div>
       <div>
         <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">📊 流程图</h3>
-        <div class="mermaid-placeholder">${MOCK.mermaid}</div>
+        <div class="mermaid-placeholder">${mermaidCode}</div>
         <p style="font-size:0.7rem;color:#999;margin-top:0.3rem;">💡 可拖拽节点微调顺序</p>
       </div>
     </div>
@@ -641,33 +786,61 @@ function updateWordCount() {
   if (editor) document.getElementById('wordCount').textContent = editor.value.length + '字';
 }
 
-function submitImitation() {
+async function submitImitation() {
   const q1 = document.getElementById('q1')?.value || '';
   const q2 = document.getElementById('q2')?.value || '';
   const q3 = document.getElementById('q3')?.value || '';
   if (!q1 || !q2 || !q3) { alert('请先完成三问自检！'); return; }
   const editor = document.getElementById('editor');
   if (!editor.value.trim()) { alert('请先写一些内容！'); return; }
-  // Random verdict for demonstration
-  const verdicts = ['green', 'yellow', 'red'];
-  const v = verdicts[Math.floor(Math.random() * verdicts.length)];
+  const imitationText = editor.value.trim();
+  dataCache.threeAnswers = { conflict_cause: q1, motivation: q2, value_core: q3 };
+
+  // Call real validate API
+  const btn = document.querySelector('#nodeContent .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 校验中...'; }
+
+  const result = await API.validate(
+    dataCache.originalText,
+    imitationText,
+    dataCache.threeAnswers,
+    wc.getState().stage,
+    wc.getState().dailySubmitCount
+  );
+
+  let v = 'yellow';
+  if (result && result.verdict) {
+    v = result.verdict;
+  } else {
+    // Fallback random if API failed
+    const verdicts = ['green', 'yellow', 'red'];
+    v = verdicts[Math.floor(Math.random() * verdicts.length)];
+  }
+
   if (v === 'red' && Math.random() > 0.5) {
-    // Trigger cooldown
     wc.setCooldown(24);
   }
   wc.completeNode(6);
+  wc.incrementDailyCount();
   render();
-  // Auto-trigger validation display
-  setTimeout(() => showVerdict(v, q1, q2, q3), 100);
+  setTimeout(() => {
+    const sims = result ? [
+      result.conflict_similarity ?? 0.5,
+      result.motivation_similarity ?? 0.5,
+      result.value_similarity ?? 0.5,
+    ] : null;
+    showVerdict(v, q1, q2, q3, sims);
+  }, 100);
 }
 
-function showVerdict(v, q1, q2, q3) {
-  const data = {
+function showVerdict(v, q1, q2, q3, similarities) {
+  const defaults = {
     green: { label: '绿灯通过', cls: 'verdict-green', sims: [0.25, 0.18, 0.32] },
     yellow: { label: '黄灯警示', cls: 'verdict-yellow', sims: [0.45, 0.62, 0.38] },
     red: { label: '红灯驳回', cls: 'verdict-red', sims: [0.72, 0.55, 0.68] },
   };
-  const d = data[v];
+  const d = defaults[v];
+  const sims = similarities || d.sims;
   document.getElementById('nodeContent').innerHTML = `
   <div class="card node-content">
     <h2>节点7：校验与复盘</h2>
@@ -680,9 +853,9 @@ function showVerdict(v, q1, q2, q3) {
       <div>
         <h3 style="font-size:0.85rem;margin-bottom:0.5rem;">📊 三维相似度</h3>
         <table style="width:100%;font-size:0.8rem;">
-          <tr><td>矛盾起因</td><td>${Math.round(d.sims[0]*100)}%</td><td><progress value="${d.sims[0]}" max="1" style="width:100px;"></progress></td></tr>
-          <tr><td>动机路径</td><td>${Math.round(d.sims[1]*100)}%</td><td><progress value="${d.sims[1]}" max="1" style="width:100px;"></progress></td></tr>
-          <tr><td>价值落点</td><td>${Math.round(d.sims[2]*100)}%</td><td><progress value="${d.sims[2]}" max="1" style="width:100px;"></progress></td></tr>
+          <tr><td>矛盾起因</td><td>${Math.round(sims[0]*100)}%</td><td><progress value="${sims[0]}" max="1" style="width:100px;"></progress></td></tr>
+          <tr><td>动机路径</td><td>${Math.round(sims[1]*100)}%</td><td><progress value="${sims[1]}" max="1" style="width:100px;"></progress></td></tr>
+          <tr><td>价值落点</td><td>${Math.round(sims[2]*100)}%</td><td><progress value="${sims[2]}" max="1" style="width:100px;"></progress></td></tr>
         </table>
         ${v === 'red' ? `
         <div class="diagnosis-steps" style="margin-top:1rem;">
@@ -715,7 +888,7 @@ function showVerdict(v, q1, q2, q3) {
       </div>
     </div>
   </div>`;
-  setTimeout(() => drawRadarChart(d.sims), 50);
+  setTimeout(() => drawRadarChart(sims), 50);
 }
 
 function drawRadarChart(sims) {
