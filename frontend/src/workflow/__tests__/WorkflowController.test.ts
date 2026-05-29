@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, jest } from "@jest/globals";
 import { WorkflowController, NodeId, NodeStatus } from "../WorkflowController";
 
 describe("WorkflowController", () => {
@@ -175,7 +175,7 @@ describe("WorkflowController", () => {
 
   it("subscribe calls listener on state changes", () => {
     const wc = new WorkflowController();
-    const listener = vi.fn();
+    const listener = jest.fn();
     wc.subscribe(listener);
     wc.completeNode(NodeId.SELECTION);
     expect(listener).toHaveBeenCalledTimes(1);
@@ -183,7 +183,7 @@ describe("WorkflowController", () => {
 
   it("subscribe returns unsubscribe function", () => {
     const wc = new WorkflowController();
-    const listener = vi.fn();
+    const listener = jest.fn();
     const unsubscribe = wc.subscribe(listener);
     unsubscribe();
     wc.completeNode(NodeId.SELECTION);
@@ -192,8 +192,8 @@ describe("WorkflowController", () => {
 
   it("multiple listeners all receive notifications", () => {
     const wc = new WorkflowController();
-    const a = vi.fn();
-    const b = vi.fn();
+    const a = jest.fn();
+    const b = jest.fn();
     wc.subscribe(a);
     wc.subscribe(b);
     wc.completeNode(NodeId.SELECTION);
