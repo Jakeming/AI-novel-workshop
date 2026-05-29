@@ -3,8 +3,8 @@ service.py — ValidationService facade.
 Deep seam: one public method, delegates to comparators + aggregator.
 """
 from models.schemas import SimilarityInput, SimilarityOutput
-from .validation.comparators import SkeletonComparator, EmotionComparator, EmbeddingComparator
-from .validation.aggregator import ValidationAggregator
+from .comparators import SkeletonComparator, EmotionComparator, EmbeddingComparator
+from .aggregator import ValidationAggregator
 
 
 class ValidationService:

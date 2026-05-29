@@ -94,5 +94,7 @@ class LLM:
     def reset_stats(self):
         self._stats = {"calls": 0, "tokens": 0, "errors": 0}
 
-# --- convenience shortcut ---
-_call = LLM().call
+# --- convenience shortcut (lazy init, callable) ---
+def _call_lazy(task_name: str, ctx: dict, **kw) -> dict:
+    """Lazy LLM shortcut — defers client init until first call."""
+    return LLM().call(task_name, ctx, **kw)

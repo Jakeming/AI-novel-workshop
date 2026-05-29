@@ -52,10 +52,10 @@ class ProbeContextLoader:
 
     def load(self, user_id: str) -> ProbeContext:
         """Single round-trip to DB (or batch query) to build context."""
-        # In production: one big query joining users, sessions, drafts.
-        # Here: placeholder returning empty context.
         ctx = ProbeContext(snapshot_time=datetime.utcnow(), user_id=user_id)
-        # _populate(ctx)  — real impl
+        if self._db:
+            data = self._db.get_probe_context(user_id)
+            ctx.consecutive_failures_2h = data.get("consecutive_failures_2h", 0)
         return ctx
 
 

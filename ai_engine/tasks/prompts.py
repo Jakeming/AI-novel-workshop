@@ -4,7 +4,7 @@ prompts.py — Prompt templates for each AI task.
 Registered with LLM client via @register_prompt decorator.
 Each fn receives ctx dict, returns prompt string.
 """
-from ai_engine.core.llm import register_prompt
+from core.llm import register_prompt
 
 
 @register_prompt("deep_read")

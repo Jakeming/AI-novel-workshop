@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deconstruct Studio — 7节点工作流 MVP</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+
+/* Layout */
+.app-header { background: white; border-bottom: 1px solid #e0e0e0; padding: 0.75rem 2rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+.app-header h1 { font-size: 1.1rem; font-weight: 600; }
+.app-header .badge { font-size: 0.7rem; background: #e8f5e9; color: #2e7d32; padding: 0.15rem 0.5rem; border-radius: 999px; }
+
+.main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 2rem; }
+
+/* Stepper */
+.stepper { display: flex; align-items: flex-start; background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 1.5rem; overflow-x: auto; gap: 0; }
+.step { display: flex; align-items: center; flex: 1; min-width: 0; }
+.step-inner { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.25rem; border-radius: 6px; transition: all 0.2s; white-space: nowrap; }
+.step-inner:hover { background: #f5f6fa; }
+.step-circle { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; border: 2px solid #ccc; color: #999; transition: all 0.3s; flex-shrink: 0; }
+.step. active .step-circle { border-color: #4a6cf7; background: #4a6cf7; color: white; }
+.step.completed .step-circle { border-color: #22c55e; background: #22c55e; color: white; }
+.step.cooldown .step-circle { border-color: #f59e0b; background: #fef3c7; color: #f59e0b; }
+.step.locked .step-circle { border-color: #d1d5db; background: #f3f4f6; color: #bbb; }
+.step-label { font-size: 0.75rem; color: #666; }
+.step.locked .step-label { color: #bbb; }
+.step.cooldown .step-label { color: #f59e0b; }
+.step-connector { flex: 1; height: 2px; background: #e0e0e0; margin: 0 0.5rem; margin-top: -0.75rem; min-width: 12px; }
+.step.completed .step-connector { background: #22c55e; }
+.step.human .step-circle { border-width: 3px; }
+.step.human .step-label::after { content: " 🧑"; font-size: 0.65rem; }
+
+/* Content card */
+.card { background: white; border-radius: 12px; padding: 1.5rem 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 1rem; min-height: 400px; }
+.card h2 { font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.card h2 .tag { font-size: 0.65rem; background: #eef2ff; color: #4a6cf7; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 400; }
+.card .desc { color: #666; font-size: 0.85rem; margin-bottom: 1.25rem; line-height: 1.5; }
+
+.btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1.25rem; border-radius: 8px; font-size: 0.85rem; font-weight: 500; border: none; cursor: pointer; transition: all 0.15s; }
+.btn-primary { background: #4a6cf7; color: white; }
+.btn-primary:hover { background: #3b5de7; }
+.btn-primary:disabled { background: #a0b4f8; cursor: not-allowed; }
+.btn-outline { background: transparent; border: 1.5px solid #d1d5db; color: #374151; }
+.btn-outline:hover { border-color: #4a6cf7; color: #4a6cf7; }
+.btn-success { background: #22c55e; color: white; }
+.btn-success:hover { background: #16a34a; }
+.btn-danger { background: #ef4444; color: white; }
+.btn-ghost { background: transparent; color: #666; border: none; }
+.btn-ghost:hover { background: #f3f4f6; }
+.btn-sm { padding: 0.3rem 0.75rem; font-size: 0.75rem; }
+
+/* Node content */
+.hidden-node { display: none; }
+.node-content { animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Node 1 - Import */
+.import-options { display: flex; gap: 0.75rem; margin-bottom: 1rem; }
+.import-option { flex: 1; border: 2px dashed #d1d5db; border-radius: 10px; padding: 1.5rem; text-align: center; cursor: pointer; transition: all 0.2s; }
+.import-option:hover { border-color: #4a6cf7; background: #f8f9ff; }
+.import-option .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+.import-option .label { font-size: 0.8rem; color: #374151; font-weight: 500; }
+.import-option .sub { font-size: 0.7rem; color: #999; margin-top: 0.25rem; }
+
+/* Node 2 - Deep Read */
+.curve-container { height: 160px; position: relative; margin-bottom: 1rem; }
+.emotion-legend { display: flex; gap: 1rem; margin-bottom: 0.75rem; font-size: 0.75rem; color: #666; }
+.emotion-legend span { display: flex; align-items: center; gap: 0.3rem; }
+.emotion-legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.hooks-list { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.hook-tag { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 999px; background: #fef3c7; color: #92400e; }
+
+/* Node 3 - Deconstruct */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.list-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.75rem; }
+.list-card h3 { font-size: 0.8rem; color: #666; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.3rem; }
+.list-card ul { list-style: none; }
+.list-card li { padding: 0.4rem 0; border-bottom: 1px solid #f3f4f6; font-size: 0.8rem; display: flex; align-items: center; gap: 0.4rem; }
+.list-card li:last-child { border: none; }
+.badge-green { background: #dcfce7; color: #166534; font-size: 0.6rem; padding: 0.1rem 0.3rem; border-radius: 4px; }
+.badge-orange { background: #fef3c7; color: #92400e; font-size: 0.6rem; padding: 0.1rem 0.3rem; border-radius: 4px; }
+
+/* Node 4 - Filter */
+.filter-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.filter-item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; font-size: 0.8rem; }
+.filter-item .actions { display: flex; gap: 0.3rem; margin-top: 0.4rem; }
+.strip-test-result { background: #f9fafb; border-radius: 8px; padding: 0.75rem; margin-top: 0.5rem; font-size: 0.75rem; }
+
+/* Node 5 - Skeleton */
+.mermaid-placeholder { background: #1a1a2e; border-radius: 8px; padding: 1rem; color: #e0e0e0; font-family: monospace; font-size: 0.8rem; line-height: 1.6; margin-bottom: 1rem; overflow-x: auto; }
+.skeleton-text { background: #f9fafb; border-radius: 8px; padding: 1rem; line-height: 1.8; font-size: 0.85rem; }
+
+/* Node 6 - Write */
+.editor-toolbar { display: flex; gap: 0.25rem; padding: 0.5rem; border: 1px solid #d1d5db; border-bottom: none; border-radius: 8px 8px 0 0; background: #f9fafb; }
+.editor-area { width: 100%; min-height: 250px; border: 1px solid #d1d5db; border-radius: 0 0 8px 8px; padding: 1rem; font-size: 0.9rem; line-height: 1.8; resize: vertical; font-family: inherit; }
+.three-questions { background: #f8f9ff; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border: 1px solid #dbeafe; }
+.three-questions h3 { font-size: 0.85rem; color: #1e40af; margin-bottom: 0.5rem; }
+.three-questions .q { font-size: 0.78rem; margin-bottom: 0.5rem; }
+.three-questions .q input { border: 1px solid #d1d5db; border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.78rem; width: 100%; margin-top: 0.2rem; }
+
+/* Node 7 - Validate */
+.radar-container { height: 260px; max-width: 340px; margin: 0 auto 1rem; }
+.verdict-badge { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; }
+.verdict-green { background: #dcfce7; color: #166534; }
+.verdict-yellow { background: #fef3c7; color: #92400e; }
+.verdict-red { background: #fee2e2; color: #991b1b; }
+.diagnosis-steps { display: flex; gap: 0.75rem; margin-top: 1rem; }
+.diag-step { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.75rem; text-align: center; }
+.diag-step .num { width: 24px; height: 24px; border-radius: 50%; background: #4a6cf7; color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; margin-bottom: 0.4rem; }
+.diag-step h4 { font-size: 0.78rem; margin-bottom: 0.25rem; }
+.diag-step p { font-size: 0.7rem; color: #666; line-height: 1.4; }
+
+/* Cooldown overlay */
+.cooldown-bar { background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; margin-bottom: 1rem; }
+.cooldown-bar .timer { font-weight: 700; color: #f59e0b; font-variant-numeric: tabular-nums; }
+.emergency-pack { background: white; border: 1px solid #fde68a; border-radius: 8px; padding: 1rem; margin-top: 0.75rem; }
+.emergency-pack h4 { font-size: 0.85rem; margin-bottom: 0.5rem; }
+.emergency-pack .idea { padding: 0.4rem 0; border-bottom: 1px solid #f3f4f6; font-size: 0.78rem; color: #374151; }
+.emergency-pack .idea:last-child { border: none; }
+
+/* Cooldown alert in stepper */
+.cooldown-alert { font-size: 0.65rem; color: #f59e0b; font-weight: 500; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .main { padding: 1rem; }
+  .two-col, .filter-layout { grid-template-columns: 1fr; }
+  .diagnosis-steps { flex-direction: column; }
+  .import-options { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>🏗️ Deconstruct Studio <span class="badge">MVP</span></h1>
+  <div style="display:flex;align-items:center;gap:0.75rem;font-size:0.8rem;">
+    <span id="stageBadge" style="background:#eef2ff;color:#4a6cf7;padding:0.15rem 0.5rem;border-radius:999px;">🌱 新手期</span>
+    <span id="cooldownStatus" style="display:none;background:#fef3c7;color:#f59e0b;padding:0.15rem 0.5rem;border-radius:999px;">⏳ 冷却中</span>
+    <button class="btn btn-sm btn-outline" onclick="resetWorkflow()">重新开始</button>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Stepper -->
+  <div class="stepper" id="stepper"></div>
+
+  <!-- Cooldown alert -->
+  <div id="cooldownAlert" style="display:none;"></div>
+
+  <!-- Node content -->
+  <div id="nodeContent"></div>
+</div>
+
+<script>
+// ===== WorkflowController (ported from TypeScript) =====
+const NodeId = { SELECTION:1, DEEP_READ:2, DECONSTRUCT:3, FILTER:4, SKELETON:5, IMITATE:6, VALIDATE:7 };
+const NodeStatus = { LOCKED:"locked", ACTIVE:"active", COMPLETED:"completed", COOLDOWN:"cooldown" };
+
+const NODE_META = {
+  [NodeId.SELECTION]:   { id:1, label:"选文导入",      human:false },
+  [NodeId.DEEP_READ]:   { id:2, label:"AI深度精读",    human:false },
+  [NodeId.DECONSTRUCT]: { id:3, label:"分层拆解",      human:false },
+  [NodeId.FILTER]:      { id:4, label:"灵气筛选",      human:true  },
+  [NodeId.SKELETON]:    { id:5, label:"生成骨架",      human:false },
+  [NodeId.IMITATE]:     { id:6, label:"仿写重构",      human:true  },
+  [NodeId.VALIDATE]:    { id:7, label:"校验复盘",      human:false },
+};
+
+class WorkflowController {
+  constructor() {
+    this.state = {
+      nodes: {},
+      cooldownUntil: null,
+      canSubmitNewImitation: true,
+      dailySubmitCount: 0,
+      stage: "novice",
+    };
+    for (const [id, meta] of Object.entries(NODE_META)) {
+      this.state.nodes[id] = { id: parseInt(id), status: id == NodeId.SELECTION ? NodeStatus.ACTIVE : NodeStatus.LOCKED, ...meta };
+    }
+    this.listeners = [];
+    this._tickInterval = null;
+  }
+
+  getState() { return this.state; }
+
+  canEnter(nodeId) {
+    const node = this.state.nodes[nodeId];
+    if (!node) return false;
+    if (node.status === NodeStatus.COMPLETED) return false;
+    if (this.state.cooldownUntil && new Date() < this.state.cooldownUntil && node.human) {
+      return node.status === NodeStatus.ACTIVE;
+    }
+    // Dependency chain
+    if (nodeId > NodeId.SELECTION) {
+      const prev = this.state.nodes[nodeId - 1];
+      if (prev && prev.status !== NodeStatus.COMPLETED) return false;
+    }
+    return node.status === NodeStatus.ACTIVE || node.status === NodeStatus.LOCKED;
+  }
+
+  completeNode(nodeId) {
+    const node = this.state.nodes[nodeId];
+    if (!node || node.status === NodeStatus.COMPLETED) return;
+    node.status = NodeStatus.COMPLETED;
+    const nextId = nodeId + 1;
+    const next = this.state.nodes[nextId];
+    if (next && next.status === NodeStatus.LOCKED) next.status = NodeStatus.ACTIVE;
+    this._notify();
+  }
+
+  setCooldown(hours) {
+    const until = new Date(Date.now() + hours * 3600000);
+    this.state.cooldownUntil = until;
+    this.state.canSubmitNewImitation = false;
+    for (const n of Object.values(this.state.nodes)) {
+      if (n.human && n.status === NodeStatus.ACTIVE) n.status = NodeStatus.COOLDOWN;
+    }
+    this._startTick();
+    this._notify();
+  }
+
+  clearCooldown() {
+    this.state.cooldownUntil = null;
+    this.state.canSubmitNewImitation = true;
+    for (const n of Object.values(this.state.nodes)) {
+      if (n.status === NodeStatus.COOLDOWN) n.status = NodeStatus.ACTIVE;
+    }
+    this._stopTick();
+    this._notify();
+  }
+
+  incrementDailyCount() {
+    this.state.dailySubmitCount++;
+    if (this.state.dailySubmitCount >= 1) this.state.canSubmitNewImitation = false;
+    this._notify();
+  }
+
+  subscribe(fn) { this.listeners.push(fn); return () => { this.listeners = this.listeners.filter(l => l !== fn); }; }
+
+  reset() {
+    for (const n of Object.values(this.state.nodes)) n.status = NodeStatus.LOCKED;
+    this.state.nodes[NodeId.SELECTION].status = NodeStatus.ACTIVE;
+    this.state.cooldownUntil = null;
+    this.state.canSubmitNewImitation = true;
+    this._stopTick();
+    this._notify();
+  }
+
+  _startTick() {
+    if (this._tickInterval) return;
+    this._tickInterval = setInterval(() => {
+      if (this.state.cooldownUntil && new Date() >= this.state.cooldownUntil) {
+        this.clearCooldown();
+      }
+      this._notify();
+    }, 1000);
+  }
+
+  _stopTick() { if (this._tickInterval) { clearInterval(this._tickInterval); this._tickInterval = null; } }
+
+  _notify() { for (const fn of this.listeners) fn(this.state); }
+}
+
+const wc = new WorkflowController();
+
+// ===== Mock data =====
+const MOCK = {
+  summary: "本文讲述了一个出身卑微的年轻人，在历经家族覆灭、挚爱离世等重大打击后，凭借坚韧意志一步步崛起，最终在乱世中建立新秩序的故事。核心立意是：在极端逆境中，人性的选择比能力更能决定命运走向。",
+  emotionCurve: [
+    { position: 0, valence: 0.3, arousal: 0.4 },
+    { position: 500, valence: -0.6, arousal: 0.7 },
+    { position: 1000, valence: 0.1, arousal: 0.5 },
+    { position: 1500, valence: -0.8, arousal: 0.9 },
+    { position: 2000, valence: -0.3, arousal: 0.6 },
+    { position: 2500, valence: 0.5, arousal: 0.5 },
+    { position: 3000, valence: 0.8, arousal: 0.3 },
+  ],
+  hooks: [
+    { position: 50, type: "悬念" }, { position: 800, type: "冲突爆发" },
+    { position: 1500, type: "情感冲击" }, { position: 2800, type: "反转" },
+  ],
+  portableLogic: [
+    "主角遭受不公后奋起反抗", "误会经过多重铺垫后解除",
+    "底层人物通过坚持获得认可", "绝境中遇到关键导师",
+  ],
+  specificElements: [
+    "在玄武门之变当天被赐婚", "用ChatGPT生成一封分手信",
+    "在末日前夜收到母亲的信", "穿越到唐朝成为御厨",
+  ],
+  skeleton: "触发（家族被灭）→ 逃亡（遇到导师）→ 隐忍修炼（3年）→ 首次反击（失败受重伤）→ 低谷（挚爱离世）→ 觉醒（发现真相）→ 决战（推翻旧秩序）→ 闭环（建立新秩序）",
+  mermaid: "graph TD\n  A[家族被灭] --> B[逃亡遇导师]\n  B --> C[隐忍修炼3年]\n  C --> D[首次反击失败]\n  D --> E[挚爱离世低谷]\n  E --> F[觉醒发现真相]\n  F --> G[决战推翻旧秩序]\n  G --> H[建立新秩序闭环]",
+  inspirationIdeas: [
+    { genre: "科幻", text: "宇航员在量子传送失败后，发现自己被困在时间裂缝中，每次醒来都是同一天的不同版本。" },
+    { genre: "校园", text: "高三学生在模拟考作弊被发现后，面临退学处分。班主任给了他一张空白答题卡，让他用一个月重新证明自己。" },
+    { genre: "宫廷", text: "宫女因在御前打碎茶杯被贬入冷宫，却在冷宫中发现了一道密道，通向先皇的秘密档案室。" },
+  ],
+  emergencyPack: [
+    "一个程序员发现自己的代码开始在深夜自动修改", "退休杀手在养老院被要求解决'邻里纠纷'",
+    "考古队在沙漠发现了一扇不应该存在的门", "一位教师在黑板上写下的公式开始自己推导出结论",
+    "外卖骑手接到一份送往30年前地址的订单", "植物学家发现自己的绿植在模仿她的一举一动",
+    "离婚律师在自己桌上发现了妻子的离婚协议书", "魔术师的最后一个魔术让观众凭空消失了",
+    "古籍修复师在书页夹层发现了一封来自未来的信", "游泳教练在池底发现了一座沉没的城市模型",
+  ],
+};
+
+// ===== Render functions =====
+
+function render() {
+  renderStepper();
+  renderCooldownAlert();
+  renderNodeContent();
+  updateHeader();
+}
+
+function renderStepper() {
+  const s = wc.getState();
+  let html = '';
+  const ids = [1,2,3,4,5,6,7];
+  ids.forEach((id, i) => {
+    const node = s.nodes[id];
+    const stepClass = node.status;
+    const humanClass = node.human ? 'human' : '';
+    const icon = node.status === 'completed' ? '✓' : (node.status === 'cooldown' ? '⏳' : id);
+    html += `<div class="step ${stepClass} ${humanClass}">
+      <div class="step-inner" onclick="clickNode(${id})">
+        <div class="step-circle">${icon}</div>
+        <div class="step-label">${node.label}</div>
+      </div>`;
+    if (i < ids.length - 1) html += `<div class="step-connector"></div>`;
+    html += `</div>`;
+  });
+  document.getElementById('stepper').innerHTML = html;
+}
+
+function renderCooldownAlert() {
+  const s = wc.getState();
+  const el = document.getElementById('cooldownAlert');
+  if (s.cooldownUntil && new Date() < s.cooldownUntil) {
+    const remaining = Math.ceil((s.cooldownUntil - new Date()) / 1000);
+    const h = Math.floor(remaining / 3600);
+    const m = Math.floor((remaining % 3600) / 60);
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div class="cooldown-bar">
+        <span>⏳ 冷却期 — 连续校验未通过</span>
+        <span class="timer">${h}小时${m}分钟</span>
+        <span style="font-size:0.75rem;color:#92400e;">后可提交新仿写稿</span>
+      </div>
+      <div class="emergency-pack">
+        <h4>🎒 创意急救包 — 随机10个故事开头</h4>
+        ${MOCK.emergencyPack.slice(0,4).map(idea => `<div class="idea">${idea}</div>`).join('')}
+        <div style="text-align:center;margin-top:0.5rem;">
+          <button class="btn btn-sm btn-ghost" onclick="alert('已刷新10个新故事开头')">🔄 换一批</button>
+        </div>
+      </div>`;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function renderNodeContent() {
+  const s = wc.getState();
+  // Find active node (first non-completed)
+  let activeId = NodeId.SELECTION;
+  for (const id of [1,2,3,4,5,6,7]) {
+    if (s.nodes[id].status !== NodeStatus.COMPLETED) { activeId = id; break; }
+  }
+  // If all complete, show done
+  if (s.nodes[7].status === NodeStatus.COMPLETED) {
+    renderAllDone(); return;
+  }
+  const renderers = { 1: renderNode1, 2: renderNode2, 3: renderNode3, 4: renderNode4, 5: renderNode5, 6: renderNode6, 7: renderNode7 };
+  renderers[activeId]();
+}
+
+function clickNode(id) {
+  const s = wc.getState();
+  if (s.nodes[id].status === NodeStatus.COMPLETED) {
+    renderers[id]();
+  }
+}
+
+function completeAndAdvance(id) {
+  wc.completeNode(id);
+  render();
+}
+
+// ===== Node Renderers =====
+
+function renderNode1() {
+  const el = document.getElementById('nodeContent');
+  el.innerHTML = `
+  <div class="card node-content">
+    <h2>节点1：选文与导入</h2>
+    <p class="desc">选择一篇你想拆解的小说/文章。支持多种导入方式。</p>
+    <div class="import-options">
+      <div class="import-option" onclick="alert('📋 已粘贴剪贴板内容')">
+        <div class="icon">📋</div>
+        <div class="label">粘贴文本</div>
+        <div class="sub">Ctrl+V 快速导入</div>
+      </div>
+      <div class="import-option" onclick="alert('🔗 请输入URL')">
+        <div class="icon">🔗</div>
+        <div class="label">URL导入</div>
+        <div class="sub">自动抓取文章内容</div>
+      </div>
+      <div class="import-option" onclick="alert('📁 请选择文件')">
+        <div class="icon">📁</div>
+        <div class="label">上传文件</div>
+        <div class="sub">支持.md .txt</div>
+      </div>
+    </div>
+    <textarea placeholder="或在此直接粘贴全文..." style="width:100%;min-height:120px;border:1px solid #d1d5db;border-radius:8px;padding:0.75rem;font-size:0.85rem;line-height:1.6;resize:vertical;font-family:inherit;margin-bottom:1rem;"></textarea>
+    <div style="display:flex;gap:0.5rem;align-items:center;">
+      <button class="btn btn-primary" onclick="completeAndAdvance(1)">已导入，开始精读 →</button>
+      <span style="font-size:0.7rem;color:#999;">示例文章已预载（约3200字）</span>
+    </div>
+  </div>`;
+}
+
+function renderNode2() {
+  const el = document.getElementById('nodeContent');
+  el.innerHTML = `
+  <div class="card node-content">
+    <h2>节点2：AI深度精读 <span class="tag">AI生成</span></h2>
+    <p class="desc">AI已自动完成深度分析，以下为精读报告。</p>
+
+    <div style="margin-bottom:1rem;">
+      <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">📝 摘要</h3>
+      <p style="font-size:0.8rem;color:#555;line-height:1.6;background:#f9fafb;padding:0.75rem;border-radius:8px;">${MOCK.summary}</p>
+    </div>
+
+    <div style="margin-bottom:1rem;">
+      <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">📈 情绪曲线</h3>
+      <div class="emotion-legend">
+        <span><span class="dot" style="background:#22c55e;"></span> valence (正负)</span>
+        <span><span class="dot" style="background:#f59e0b;"></span> arousal (强度)</span>
+      </div>
+      <div class="curve-container"><canvas id="emotionChart"></canvas></div>
+    </div>
+
+    <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+      <div>
+        <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">🎣 钩子位置</h3>
+        <div class="hooks-list">
+          ${MOCK.hooks.map(h => `<span class="hook-tag">${h.type} @ ${h.position}字</span>`).join('')}
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">📊 字数</h3>
+        <span style="font-size:0.85rem;color:#666;">3,247 字 | 预计阅读 8 分钟</span>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;gap:0.5rem;padding:0 1rem;">
+    <button class="btn btn-primary" onclick="completeAndAdvance(2)">确认，进入拆解 →</button>
+  </div>`;
+  // Draw chart after render
+  setTimeout(drawEmotionChart, 50);
+}
+
+function drawEmotionChart() {
+  const canvas = document.getElementById('emotionChart');
+  if (!canvas) return;
+  new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: MOCK.emotionCurve.map(p => p.position + '字'),
+      datasets: [
+        { label: '情绪值', data: MOCK.emotionCurve.map(p => p.valence), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', fill: true, tension: 0.4, pointRadius: 3 },
+        { label: '强度', data: MOCK.emotionCurve.map(p => p.arousal), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.4, pointRadius: 3, borderDash: [4,4] },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { min: -1, max: 1, grid: { color: '#f0f0f0' } }, x: { grid: { display: false }, ticks: { maxTicksLimit: 6 } } },
+    }
+  });
+}
+
+function renderNode3() {
+  const el = document.getElementById('nodeContent');
+  el.innerHTML = `
+  <div class="card node-content">
+    <h2>节点3：分层拆解 <span class="tag">AI生成</span></h2>
+    <p class="desc">AI已完成分层分析，将文章拆解为可复用的通用逻辑和专属桥段。</p>
+    <div class="two-col">
+      <div class="list-card">
+        <h3>✅ 可复用的通用逻辑 <span class="badge-green">Portable</span></h3>
+        <ul>${MOCK.portableLogic.map(l => `<li><span class="badge-green">通用</span> ${l}</li>`).join('')}</ul>
+      </div>
+      <div class="list-card">
+        <h3>⚠️ 专属桥段 <span class="badge-orange">Specific</span></h3>
+        <ul>${MOCK.specificElements.map(l => `<li><span class="badge-orange">专属</span> ${l}</li>`).join('')}</ul>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;gap:0.5rem;padding:0 1rem;">
+    <button class="btn btn-primary" onclick="completeAndAdvance(3)">确认，进入灵气筛选 →</button>
+  </div>`;
+}
+
+function renderNode4() {
+  const el = document.getElementById('nodeContent');
+  el.innerHTML = `
+  <div class="card node-content">
+    <h2>节点4：灵气筛选 🧑 <span class="tag" style="background:#fef3c2;color:#92400e;">人工核心</span></h2>
+    <p class="desc">请逐条确认AI的分类。点击"情境剥离测试器"验证某个表达手法是否真能跨题材迁移。</p>
+    <div class="filter-layout">
+      <div>
+        <h3 style="font-size:0.8rem;color:#374151;margin-bottom:0.5rem;">✅ AI认为可通用的逻辑</h3>
+        ${MOCK.portableLogic.map(l => `
+        <div class="filter-item">
+          <div>${l}</div>
+          <div class="actions">
+            <button class="btn btn-sm btn-success" onclick="this.disabled=true;this.textContent='✓ 已确认'">确认通用</button>
+            <button class="btn btn-sm btn-outline">移至专属</button>
+          </div>
+        </div>`).join('')}
+      </div>
+      <div>
+        <h3 style="font-size:0.8rem;color:#374151;margin-bottom:0.5rem;">⚠️ AI认为专属的桥段</h3>
+        ${MOCK.specificElements.map(l => `
+        <div class="filter-item">
+          <div>${l}</div>
+          <div class="actions">
+            <button class="btn btn-sm btn-outline" onclick="runStripTest(this, '${l}')">🧪 情境剥离测试</button>
+          </div>
+          <div class="strip-test-result" style="display:none;" id="strip-${Math.random().toString(36).slice(2,8)}"></div>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;gap:0.5rem;padding:0 1rem;">
+    <button class="btn btn-primary" onclick="completeAndAdvance(4)">筛选完成，生成骨架 →</button>
+  </div>`;
+}
+
+function runStripTest(btn, element) {
+  const container = btn.closest('.filter-item').querySelector('.strip-test-result');
+  container.style.display = 'block';
+  container.innerHTML = `<h4 style="font-size:0.75rem;margin-bottom:0.4rem;">🧪 跨题材改写测试</h4>
+    ${MOCK.inspirationIdeas.map(idea => `
+      <div style="margin-bottom:0.4rem;padding:0.3rem 0;border-bottom:1px solid #eee;">
+        <span style="font-weight:500;color:#4a6cf7;">[${idea.genre}]</span>
+        <span>${idea.text.slice(0, 50)}...</span>
+      </div>`).join('')}
+    <button class="btn btn-sm btn-ghost" onclick="this.closest('.strip-test-result').querySelectorAll('div').forEach(d=>d.style.borderLeft='3px solid #4a6cf7');">💡 这条手法仍然打动我 → 收入灵气库</button>`;
+  btn.textContent = '✅ 已测试';
+  btn.disabled = true;
+}
+
+function renderNode5() {
+  const el = document.getElementById('nodeContent');
+  el.innerHTML = `
+  <div class="card node-content">
+    <h2>节点5：生成叙事骨架 <span class="tag">AI生成</span></h2>
+    <p class="desc">基于你的筛选结果，AI生成了纯叙事骨架。可拖拽微调。</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+      <div>
+        <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">📝 文字骨架</h3>
+        <div class="skeleton-text">${MOCK.skeleton}</div>
+      </div>
+      <div>
+        <h3 style="font-size:0.85rem;color:#374151;margin-bottom:0.4rem;">📊 流程图</h3>
+        <div class="mermaid-placeholder">${MOCK.mermaid}</div>
+        <p style="font-size:0.7rem;color:#999;margin-top:0.3rem;">💡 可拖拽节点微调顺序</p>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:flex-end;gap:0.5rem;padding:0 1rem;">
+    <button class="btn btn-primary" onclick="completeAndAdvance(5)">骨架确认，开始仿写 →</button>
+  </div>`;
+}
+
+function renderNode6() {
+  const el = document.getElementById('nodeContent');
+  el.innerHTML = `
+  <div class="card node-content">
+    <h2>节点6：仿写重构 🧑 <span class="tag" style="background:#fef3c2;color:#92400e;">人工核心</span></h2>
+    <p class="desc">基于骨架开始你的仿写。先完成三问自检，再进入写作。</p>
+
+    <div class="three-questions">
+      <h3>📋 三问自检（必填）</h3>
+      <div class="q">
+        <strong>第一问：</strong>我故事的矛盾起因，与原文是否完全不同？
+        <input type="text" placeholder="例：原文是家族仇恨，我改为理念冲突" id="q1">
+      </div>
+      <div class="q">
+        <strong>第二问：</strong>我主角的行为动机，是否与原文独立？
+        <input type="text" placeholder="例：原文主角为复仇，我主角为自我救赎" id="q2">
+      </div>
+      <div class="q">
+        <strong>第三问：</strong>我最终的价值落点，是否不再依附原文？
+        <input type="text" placeholder="例：原文是宽恕带来解脱，我改为坚持带来改变" id="q3">
+      </div>
+    </div>
+
+    <div class="editor-toolbar">
+      <button class="btn btn-sm btn-ghost" onclick="insertAtCursor('**加粗**')">B</button>
+      <button class="btn btn-sm btn-ghost" onclick="insertAtCursor('*斜体*')">I</button>
+      <button class="btn btn-sm btn-ghost" onclick="showInspiration()">💡 查看相关灵气</button>
+      <span style="flex:1;"></span>
+      <span style="font-size:0.7rem;color:#999;" id="wordCount">0字</span>
+    </div>
+    <textarea class="editor-area" id="editor" oninput="updateWordCount()" placeholder="在此开始你的仿写..."></textarea>
+  </div>
+  <div style="display:flex;justify-content:flex-end;gap:0.5rem;padding:0 1rem;">
+    <button class="btn btn-primary" onclick="submitImitation()">提交校验 →</button>
+  </div>`;
+}
+
+function insertAtCursor(text) {
+  const editor = document.getElementById('editor');
+  if (!editor) return;
+  const start = editor.selectionStart, end = editor.selectionEnd;
+  editor.value = editor.value.slice(0, start) + text + editor.value.slice(end);
+  editor.focus();
+  editor.selectionStart = editor.selectionEnd = start + text.length;
+  updateWordCount();
+}
+
+function showInspiration() {
+  alert('💡 相关灵气（基于当前选中文本检索）：\n\n1. "用具象动作表现犹豫" — 他在门口站了三次，手抬起又放下\n2. "用环境映射情绪" — 窗外的雨声越来越密，像她此刻的心跳\n3. "反差式对话推进" — 笑着说出最残忍的话');
+}
+
+function updateWordCount() {
+  const editor = document.getElementById('editor');
+  if (editor) document.getElementById('wordCount').textContent = editor.value.length + '字';
+}
+
+function submitImitation() {
+  const q1 = document.getElementById('q1')?.value || '';
+  const q2 = document.getElementById('q2')?.value || '';
+  const q3 = document.getElementById('q3')?.value || '';
+  if (!q1 || !q2 || !q3) { alert('请先完成三问自检！'); return; }
+  const editor = document.getElementById('editor');
+  if (!editor.value.trim()) { alert('请先写一些内容！'); return; }
+  // Random verdict for demonstration
+  const verdicts = ['green', 'yellow', 'red'];
+  const v = verdicts[Math.floor(Math.random() * verdicts.length)];
+  if (v === 'red' && Math.random() > 0.5) {
+    // Trigger cooldown
+    wc.setCooldown(24);
+  }
+  wc.completeNode(6);
+  render();
+  // Auto-trigger validation display
+  setTimeout(() => showVerdict(v, q1, q2, q3), 100);
+}
+
+function showVerdict(v, q1, q2, q3) {
+  const data = {
+    green: { label: '绿灯通过', cls: 'verdict-green', sims: [0.25, 0.18, 0.32] },
+    yellow: { label: '黄灯警示', cls: 'verdict-yellow', sims: [0.45, 0.62, 0.38] },
+    red: { label: '红灯驳回', cls: 'verdict-red', sims: [0.72, 0.55, 0.68] },
+  };
+  const d = data[v];
+  document.getElementById('nodeContent').innerHTML = `
+  <div class="card node-content">
+    <h2>节点7：校验与复盘</h2>
+    <p class="desc">仿写稿与原作的相似度分析报告。</p>
+    <div style="text-align:center;margin-bottom:0.75rem;">
+      <span class="verdict-badge ${d.cls}">${d.label}</span>
+    </div>
+    <div class="two-col">
+      <div class="radar-container"><canvas id="radarChart"></canvas></div>
+      <div>
+        <h3 style="font-size:0.85rem;margin-bottom:0.5rem;">📊 三维相似度</h3>
+        <table style="width:100%;font-size:0.8rem;">
+          <tr><td>矛盾起因</td><td>${Math.round(d.sims[0]*100)}%</td><td><progress value="${d.sims[0]}" max="1" style="width:100px;"></progress></td></tr>
+          <tr><td>动机路径</td><td>${Math.round(d.sims[1]*100)}%</td><td><progress value="${d.sims[1]}" max="1" style="width:100px;"></progress></td></tr>
+          <tr><td>价值落点</td><td>${Math.round(d.sims[2]*100)}%</td><td><progress value="${d.sims[2]}" max="1" style="width:100px;"></progress></td></tr>
+        </table>
+        ${v === 'red' ? `
+        <div class="diagnosis-steps" style="margin-top:1rem;">
+          <div class="diag-step">
+            <div class="num">1</div>
+            <h4>定位问题</h4>
+            <p>矛盾起因相似度过高</p>
+          </div>
+          <div class="diag-step">
+            <div class="num">2</div>
+            <h4>头脑风暴</h4>
+            <p>20分钟自由发散</p>
+          </div>
+          <div class="diag-step">
+            <div class="num">3</div>
+            <h4>定点修改</h4>
+            <p>仅修改相关段落</p>
+          </div>
+        </div>
+        <button class="btn btn-outline" style="margin-top:0.75rem;" onclick="alert('🧠 限时头脑风暴：20分钟倒计时开始！\n\n提示：如果主角的性别/年龄/社会地位完全改变？\n如果矛盾的起因是误会而非事实？\n如果故事发生在完全不同的时代？')">🧠 开始头脑风暴</button>
+        ` : `
+        <div style="margin-top:1rem;background:#f0fdf4;border-radius:8px;padding:1rem;font-size:0.8rem;">
+          ✅ 校验通过！系统将自动打包归档。
+          <div style="margin-top:0.5rem;">
+            <button class="btn btn-sm btn-primary" onclick="alert('归档完成！\n\n本次拆解学到的核心手法：用具象动作表达抽象情绪\n骨架通用性评分：★★★★☆\n已自动存储至个人创作库')">📦 归档</button>
+            <button class="btn btn-sm btn-outline" style="margin-left:0.5rem;" onclick="alert('导出包已生成：deconstruct_export_20260528.zip')">⬇️ 导出</button>
+          </div>
+        </div>
+        `}
+      </div>
+    </div>
+  </div>`;
+  setTimeout(() => drawRadarChart(d.sims), 50);
+}
+
+function drawRadarChart(sims) {
+  const canvas = document.getElementById('radarChart');
+  if (!canvas) return;
+  new Chart(canvas, {
+    type: 'radar',
+    data: {
+      labels: ['矛盾起因', '动机路径', '价值落点'],
+      datasets: [
+        { label: '相似度', data: sims, borderColor: '#4a6cf7', backgroundColor: 'rgba(74,108,247,0.2)', pointBackgroundColor: '#4a6cf7', fill: true },
+        { label: '阈值', data: [0.7, 0.7, 0.7], borderColor: '#ef4444', borderDash: [4,4], pointRadius: 0, fill: false },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { r: { min: 0, max: 1, ticks: { stepSize: 0.2 } } },
+      plugins: { legend: { position: 'bottom' } },
+    }
+  });
+}
+
+function renderAllDone() {
+  document.getElementById('nodeContent').innerHTML = `
+  <div class="card node-content" style="text-align:center;padding:3rem;">
+    <h2 style="font-size:1.3rem;justify-content:center;">🎉 完整闭环完成！</h2>
+    <p class="desc" style="max-width:400px;margin:1rem auto;">你已完成一篇完整的拆文-仿写-校验闭环。系统已自动打包5份标准化文件至个人创作库。</p>
+    <div style="display:flex;gap:0.75rem;justify-content:center;">
+      <button class="btn btn-success" onclick="resetWorkflow()">开始新的拆解</button>
+      <button class="btn btn-outline" onclick="alert('导出中...')">📦 导出档案包</button>
+    </div>
+  </div>`;
+}
+
+function updateHeader() {
+  const s = wc.getState();
+  document.getElementById('stageBadge').textContent = `🌱 新手期`;
+  const cs = document.getElementById('cooldownStatus');
+  if (s.cooldownUntil && new Date() < s.cooldownUntil) {
+    cs.style.display = 'inline';
+  } else {
+    cs.style.display = 'none';
+  }
+}
+
+function resetWorkflow() {
+  wc.reset();
+  render();
+}
+
+// ===== Init =====
+wc.subscribe(() => {});
+render();
+</script>
+</body>
+</html>

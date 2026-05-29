@@ -4,3 +4,7 @@ dist/
 *.pyc
 __pycache__/
 .vite/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
