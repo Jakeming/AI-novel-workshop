@@ -2,7 +2,7 @@
 server.py — FastAPI server for Deconstruct Studio AI Engine.
 Uses configurable DB (SQLite dev / PostgreSQL prod).
 """
-import os, logging
+import os, logging, urllib.request, json
 from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends
@@ -227,6 +227,34 @@ def api_strip_test(req: TaskRequest):
     """Node 4: Cross-genre strip test for a specific element."""
     ctx = {"specific_element": req.specific_element}
     return _run_ai_task("strip_test", ctx)
+
+
+class FetchURLRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/fetch-url")
+def api_fetch_url(req: FetchURLRequest):
+    """Fetch text content from a URL (CORS proxy for frontend)."""
+    url = req.url.strip()
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    try:
+        with urllib.request.urlopen(url, timeout=15) as resp:
+            content_type = resp.headers.get("Content-Type", "")
+            raw = resp.read()
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                text = raw.decode("utf-8", errors="replace")
+            # Strip HTML tags for HTML content
+            if "text/html" in content_type:
+                import re
+                text = re.sub(r"<[^>]+>", "", text)
+                text = re.sub(r"\s+", " ", text).strip()
+            return {"url": url, "content": text[:50000], "truncated": len(text) > 50000}
+    except Exception as e:
+        raise HTTPException(400, f"Failed to fetch URL: {e}")
 
 
 @app.get("/")
